@@ -1,4 +1,4 @@
-package org.example;
+package org.example.websocket;
 import java.security.MessageDigest;
 import java.util.Base64;
 import java.util.regex.Matcher;
