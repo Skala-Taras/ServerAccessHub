@@ -107,6 +107,7 @@
       copy:
         content: |
           TAILSCALE_IP={{ tailscale_ip }}
+          USER={{ user }}
         dest: "{{ app_dir }}/.env"
         mode: '0644'
 

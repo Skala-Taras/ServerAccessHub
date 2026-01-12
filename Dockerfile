@@ -36,7 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean
 
 # Set working directory
-WORKDIR /app
+WORKDIR /home/{{ USER }}/app
 
 # Copy compiled JAR from build stage
 COPY --from=build /build/target/*.jar app.jar
@@ -48,7 +48,7 @@ COPY web ./web
 COPY keystore.jks .
 
 # Create cloudStorage directory
-RUN mkdir -p /app/cloudStorage
+RUN mkdir -p /home/{{ USER }}/app/cloudStorage
 
 # Set environment variables
 ENV LANG=en_US.UTF-8
