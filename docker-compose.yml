@@ -5,24 +5,19 @@ services:
       dockerfile: Dockerfile
     container_name: serveraccesshub
     
-    # Port mapping: host:container
     ports:
-      - "8080:8080"
+      - "${TAILSCALE_IP:-127.0.0.1}:8080:8080"
     
-    # Volume mounts
     volumes:
-      # Persistent storage for files
       - ./cloudStorage:/app/cloudStorage
     
     extra_hosts:
       - "host.docker.internal:host-gateway"
     
-    # Environment variables
     environment:
       - LANG=en_US.UTF-8
       - TERM=xterm-256color
       - TZ=Europe/Warsaw
     
-    # Restart policy
     restart: unless-stopped
 

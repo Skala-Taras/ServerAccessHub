@@ -102,6 +102,14 @@
         state: directory
         mode: '0755'
 
+    # Create .env file for docker-compose
+    - name: Create .env file with Tailscale IP
+      copy:
+        content: |
+          TAILSCALE_IP={{ tailscale_ip }}
+        dest: "{{ app_dir }}/.env"
+        mode: '0644'
+
     # Start application
     - name: Build and start containers
       command: docker compose up --build -d
