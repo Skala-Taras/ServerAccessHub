@@ -1,0 +1,117 @@
+---
+# ServerAccessHub - Ansible Deployment Playbook
+# Deploys the application on Ubuntu server with Docker
+# Variables loaded from .env file (not committed to git)
+
+- name: Deploy ServerAccessHub
+  hosts: servers
+  become: yes
+  vars_files:
+    - .env.yml
+    
+  tasks:
+    # Update Ubuntu
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        autoremove: yes
+
+    # Install dependencies
+    - name: Install required packages
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+          - git
+          - openjdk-21-jdk-headless
+        state: present
+
+    # Install Docker
+    - name: Add Docker GPG key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker repository
+      apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+
+    - name: Install Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+
+    - name: Start Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Add user to docker group
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    # Clone project
+    - name: Create app directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Clone repository
+      git:
+        repo: "{{ github_repo }}"
+        dest: "{{ app_dir }}"
+        force: yes
+      
+    # Generate SSL certificate
+    - name: Generate SSL keystore
+      command: >
+        keytool -genkeypair
+        -alias server
+        -keyalg RSA
+        -keysize 2048
+        -validity 365
+        -keystore {{ app_dir }}/keystore.jks
+        -storepass {{ keystore_password }}
+        -keypass {{ keystore_password }}
+        -dname "CN=localhost, OU=Dev, O=Personal, L=City, ST=State, C=US"
+      args:
+        creates: "{{ app_dir }}/keystore.jks"
+
+    # Create cloudStorage directory
+    - name: Create cloudStorage directory
+      file:
+        path: "{{ app_dir }}/cloudStorage"
+        state: directory
+        mode: '0755'
+
+    # Start application
+    - name: Build and start containers
+      command: docker compose up --build -d
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Show container status
+      command: docker ps
+      register: docker_status
+
+    - name: Print status
+      debug:
+        var: docker_status.stdout_lines

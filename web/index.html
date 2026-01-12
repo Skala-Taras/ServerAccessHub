@@ -7,27 +7,38 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         :root { 
-            --primary: #4a90e2; --danger: #ff4757; --success: #2ed573; 
-            --bg: #f4f7f6; --card: #ffffff; --btn-grey: #f1f3f6;
+            --primary: #5aa9ff;
+            --danger: #ff5a6a;
+            --success: #33d17a;
+
+            --bg: #0b0f14;
+            --card: #121a24;
+            --card-2: #0f1720;
+            --btn-grey: #1b2633;
+            --text: #e6edf3;
+            --muted: #94a3b8;
+            --border: rgba(148, 163, 184, 0.18);
         }
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 15px; color: #2d3436; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); margin: 0; padding: 15px; color: var(--text); }
         .container { max-width: 850px; margin: 0 auto; }
         
         .toolbar { 
             display: flex; flex-direction: column; gap: 12px; 
             background: var(--card); padding: 12px; border-radius: 20px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35); margin-bottom: 20px;
             width: 100%;
         }
 
         .address-row { position: relative; flex: 1; width: 100%; }
         input#currentPath { 
-            width: 100%; padding: 14px 18px; border: 1px solid #dfe6e9; 
-            border-radius: 12px; font-size: 16px; outline: none; background: #fff;
+            width: 100%; padding: 14px 18px; border: 1px solid var(--border); 
+            border-radius: 12px; font-size: 16px; outline: none; background: var(--card-2);
+            color: var(--text);
             display: block;
         }
+        input#currentPath::placeholder { color: rgba(148,163,184,0.7); }
 
         /* UKŁAD: Nowy Folder (lewo) -> Refresh (środek) -> Back (prawo) */
         .actions-row { 
@@ -39,7 +50,9 @@
         button { border: none; border-radius: 12px; cursor: pointer; font-weight: 600; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
         
         .btn-create { background: var(--success); color: white; flex: 1; height: 50px; font-size: 15px; gap: 8px; white-space: nowrap; }
-        .btn-nav { background: var(--btn-grey); width: 50px; height: 50px; font-size: 20px; }
+        .btn-nav { background: var(--btn-grey); width: 50px; height: 50px; font-size: 20px; color: var(--text); }
+        .btn-nav:hover { filter: brightness(1.06); }
+        .btn-create:hover { filter: brightness(1.06); }
 
         @media (min-width: 600px) {
             .toolbar { flex-direction: row; padding-right: 12px; }
@@ -50,37 +63,435 @@
 
         #suggestionList {
             position: absolute; top: 105%; left: 0; right: 0;
-            background: white; border-radius: 12px; border: 1px solid #eee;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1); z-index: 1001;
+            background: var(--card); border-radius: 12px; border: 1px solid var(--border);
+            box-shadow: 0 16px 40px rgba(0,0,0,0.45); z-index: 1001;
             display: none; max-height: 200px; overflow-y: auto;
         }
-        .suggestion-item { padding: 14px; border-bottom: 1px solid #f9f9f9; display: flex; align-items: center; gap: 10px; cursor: pointer; }
-        .suggestion-item.active { background: #f0f7ff; color: var(--primary); }
+        .suggestion-item { padding: 14px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); display: flex; align-items: center; gap: 10px; cursor: pointer; }
+        .suggestion-item.active { background: rgba(90, 169, 255, 0.14); color: var(--primary); }
 
-        .file-list { background: var(--card); border-radius: 20px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.04); }
-        .file-item { display: flex; align-items: center; padding: 18px; border-bottom: 1px solid #f1f2f6; gap: 15px; }
+        .file-list { background: var(--card); border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.30); margin-bottom: 120px; }
+        .file-item { display: flex; align-items: center; padding: 18px; border-bottom: 1px solid rgba(148, 163, 184, 0.12); gap: 15px; }
         .file-info { flex: 1; cursor: pointer; min-width: 0; }
         .file-name { font-weight: 600; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); display: none; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(4px); padding: 20px; }
-        .modal { background: white; width: 100%; max-width: 400px; border-radius: 24px; padding: 25px; outline: none; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.55); display: none; align-items: center; justify-content: center; z-index: 2000; backdrop-filter: blur(6px); padding: 20px; }
+        .modal { background: var(--card); width: 100%; max-width: 400px; border-radius: 24px; padding: 25px; outline: none; border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+
+        /* Floating upload button (bottom-right) */
+        .fab-overlay {
+            position: fixed; inset: 0; background: transparent;
+            display: none; z-index: 2400;
+        }
+        .fab-container {
+            position: fixed; right: 18px; bottom: 18px; z-index: 2500;
+            display: flex; flex-direction: column; align-items: flex-end; gap: 12px;
+        }
+        .fab {
+            width: 58px; height: 58px; border-radius: 999px;
+            background: linear-gradient(135deg, var(--primary), #7c5cff);
+            color: white; font-size: 28px; line-height: 1;
+            box-shadow: 0 18px 45px rgba(0,0,0,0.55);
+        }
+        .fab:active { transform: translateY(1px); }
+
+        .fab-menu {
+            display: none;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 18px 45px rgba(0,0,0,0.55);
+            min-width: 190px;
+        }
+        .fab-menu-item {
+            width: 100%;
+            background: transparent;
+            color: var(--text);
+            padding: 12px 14px;
+            display: flex;
+            justify-content: flex-start;
+            gap: 10px;
+            border-radius: 0;
+            font-weight: 600;
+        }
+        .fab-menu-item:hover { background: rgba(148,163,184,0.10); }
+
+        .upload-toast {
+            position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+            background: rgba(15, 23, 32, 0.95);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: 14px;
+            box-shadow: 0 18px 45px rgba(0,0,0,0.55);
+            display: none;
+            z-index: 2600;
+            font-size: 13px;
+            max-width: 92vw;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 3-dots context menu (kebab menu) */
+        .item-actions { position: relative; }
+        .btn-kebab {
+            background: none;
+            border: none;
+            color: var(--muted);
+            font-size: 18px;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s, color 0.15s;
+        }
+        .btn-kebab:hover { background: rgba(148,163,184,0.12); color: var(--text); }
+        .btn-kebab svg { width: 18px; height: 18px; fill: currentColor; }
+
+        /* Action Sheet Modal (replaces context menu) */
+        .action-sheet-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(4px);
+            z-index: 4000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+        }
+        .action-sheet-overlay.active { display: flex; }
+        
+        .action-sheet {
+            background: var(--card);
+            border-radius: 20px;
+            width: 100%;
+            max-width: 400px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            animation: scaleIn 0.2s ease-out;
+        }
+        @keyframes scaleIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        
+        .action-sheet-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+        .action-sheet-header-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .action-sheet-header-icon {
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .action-sheet-header-icon svg { width: 40px; height: 40px; }
+        .action-sheet-title {
+            font-weight: 600;
+            font-size: 16px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .action-sheet-subtitle {
+            font-size: 13px;
+            color: var(--muted);
+        }
+        
+        .action-sheet-item {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            width: 100%;
+            padding: 16px 20px;
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: left;
+            border-bottom: 1px solid rgba(148,163,184,0.08);
+        }
+        .action-sheet-item:last-child { border-bottom: none; }
+        .action-sheet-item:hover { background: rgba(148,163,184,0.08); }
+        .action-sheet-item:active { background: rgba(148,163,184,0.15); }
+        .action-sheet-item svg { width: 20px; height: 20px; flex-shrink: 0; fill: currentColor; }
+        .action-sheet-item.danger { color: var(--danger); }
+
+        /* Header with burger menu */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 10px 0 20px 5px;
+        }
+        .header-logo {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.17em;
+            font-weight: bold;
+            margin: 0;
+        }
+        .burger-container { position: relative; }
+        .btn-burger {
+            background: var(--btn-grey);
+            color: var(--text);
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .btn-burger:hover { background: rgba(148,163,184,0.15); }
+        .btn-burger svg { width: 22px; height: 22px; fill: currentColor; }
+        .burger-menu {
+            position: absolute;
+            right: 0;
+            top: 100%;
+            margin-top: 8px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.5);
+            min-width: 180px;
+            z-index: 3500;
+            overflow: hidden;
+            display: none;
+        }
+        .burger-menu.active { display: block; }
+        .burger-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 14px 16px;
+            background: none;
+            border: none;
+            color: var(--text);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            text-align: left;
+        }
+        .burger-item:hover { background: rgba(148,163,184,0.10); }
+        .burger-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .burger-item.disabled { color: var(--muted); cursor: not-allowed; }
+        .burger-item .badge {
+            margin-left: auto;
+            font-size: 10px;
+            background: var(--primary);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+
+        /* File Preview Modal */
+        .preview-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.92);
+            display: none;
+            flex-direction: column;
+            z-index: 5000;
+            backdrop-filter: blur(10px);
+        }
+        .preview-overlay.active { display: flex; }
+        
+        .preview-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: rgba(18, 26, 36, 0.95);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+        .preview-title {
+            font-weight: 600;
+            font-size: 15px;
+            color: var(--text);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            margin-right: 12px;
+        }
+        .preview-actions { display: flex; gap: 8px; }
+        .preview-btn {
+            background: var(--btn-grey);
+            color: var(--text);
+            border: none;
+            border-radius: 8px;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s;
+        }
+        .preview-btn:hover { background: rgba(148,163,184,0.2); }
+        .preview-btn svg { width: 20px; height: 20px; fill: currentColor; }
+        .preview-btn.download { background: var(--primary); }
+        .preview-btn.download:hover { filter: brightness(1.1); }
+        
+        .preview-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: auto;
+            padding: 20px;
+        }
+        
+        .preview-content img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        .preview-content iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 8px;
+            background: white;
+        }
+        .preview-content video {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        }
+        .preview-audio-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            padding: 40px;
+        }
+        .preview-audio-icon {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border-radius: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 40px rgba(245, 158, 11, 0.3);
+        }
+        .preview-audio-icon svg { width: 60px; height: 60px; fill: white; }
+        .preview-content audio { width: 100%; max-width: 400px; }
+        
+        .preview-text {
+            width: 100%;
+            max-width: 900px;
+            height: 100%;
+            background: var(--card);
+            border-radius: 12px;
+            overflow: auto;
+            border: 1px solid var(--border);
+        }
+        .preview-text pre {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .preview-unsupported {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            color: var(--muted);
+            text-align: center;
+        }
+        .preview-unsupported svg { width: 80px; height: 80px; fill: var(--muted); }
+        .preview-unsupported p { font-size: 16px; margin: 0; }
+        
+        .preview-loading {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            color: var(--muted);
+        }
+        .preview-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div class="container">
-        <h3 style="margin: 10px 0 20px 5px;">☁️ Personal Cloud</h3>
+        <div class="header">
+            <a href="/" class="header-logo" style="text-decoration: none; color: inherit;">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="var(--primary)"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+                Personal Cloud
+            </a>
+            <div class="burger-container">
+                <button id="burgerBtn" class="btn-burger" title="Menu">
+                    <svg viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+                </button>
+                <div id="burgerMenu" class="burger-menu">
+                    <button class="burger-item" onclick="window.location.href='/terminal'">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M20 19V7H4v12h16m0-14c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V7c0-1.1.9-2 2-2h16M7.5 17l1.41-1.41L6.33 13l2.58-2.59L7.5 9l-4 4 4 4m9 0l4-4-4-4-1.41 1.41L17.67 13l-2.58 2.59L16.5 17z"/></svg>
+                        Terminal
+                    </button>
+                </div>
+            </div>
+        </div>
         
         <div class="toolbar">
             <div class="address-row">
-                <input type="text" id="currentPath" placeholder="Wpisz ścieżkę..." autocomplete="off">
+                <input type="text" id="currentPath" placeholder="Enter path..." autocomplete="off">
                 <div id="suggestionList"></div>
             </div>
 
             <div class="actions-row">
-                <button class="btn-create" onclick="showCreateModal()"><span>➕</span> Nowy Folder</button>
+                <button class="btn-create" onclick="showCreateModal()">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3V9h2v3h3v2z"/></svg>
+                    New Folder
+                </button>
                 <div class="nav-group">
-                    <button class="btn-nav" onclick="refreshUI()" title="Odśwież">🔄</button>
-                    <button class="btn-nav" onclick="goBack()" title="Wstecz">⬅️</button>
+                    <button class="btn-nav" onclick="refreshUI()" title="Refresh">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                    </button>
+                    <button class="btn-nav" onclick="goBack()" title="Back">
+                        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+                    </button>
                 </div>
             </div>
         </div>
@@ -95,12 +506,83 @@
                 <span id="modalIcon" style="font-size: 24px;"></span>
                 <h3 id="modalTitle" style="margin:0"></h3>
             </div>
-            <p id="modalText" style="color:#636e72; margin-bottom: 10px;"></p>
-            <input type="text" id="modalInput" style="width:100%; padding:14px; border:2px solid #edf2f7; border-radius:12px; outline:none;">
+            <p id="modalText" style="color:var(--muted); margin-bottom: 10px;"></p>
+            <input type="text" id="modalInput" style="width:100%; padding:14px; border:1px solid var(--border); background: var(--card-2); color: var(--text); border-radius:12px; outline:none;">
             <div style="display:flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
-                <button onclick="closeModal()" style="background:#f1f3f6; padding:12px 20px; border-radius:10px;">Anuluj</button>
+                <button onclick="closeModal()" style="background:var(--btn-grey); color: var(--text); padding:12px 20px; border-radius:10px;">Anuluj</button>
                 <button id="modalConfirmBtn" style="color:white; padding:12px 25px; border-radius:10px;">OK</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Hidden pickers (opened only by user gesture) -->
+    <input id="filePicker" type="file" multiple hidden>
+    <input id="folderPicker" type="file" webkitdirectory multiple hidden>
+
+    <!-- Floating upload button + menu (bottom-right) -->
+    <div id="fabOverlay" class="fab-overlay"></div>
+    <div class="fab-container">
+        <div id="fabMenu" class="fab-menu">
+            <button id="fabUploadFiles" class="fab-menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11zm-5-6v4h-2v-4H8l4-4 4 4h-3z"/></svg>
+                Upload files
+            </button>
+            <button id="fabUploadFolder" class="fab-menu-item">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20 6h-8l-2-2H4c-1.11 0-1.99.89-1.99 2L2 18c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm0 12H4V6h5.17l2 2H20v10zm-8-4v2h-2v-2h-2v-2h2v-2h2v2h2z"/></svg>
+                Upload folder
+            </button>
+        </div>
+        <button id="fabUpload" class="fab" title="Upload">
+            <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+        </button>
+    </div>
+
+    <div id="uploadToast" class="upload-toast"></div>
+
+    <!-- Action Sheet Modal for file/folder actions -->
+    <div id="actionSheetOverlay" class="action-sheet-overlay">
+        <div class="action-sheet">
+            <div class="action-sheet-header">
+                <div class="action-sheet-header-info">
+                    <div id="actionSheetTitle" class="action-sheet-title">filename.txt</div>
+                    <div id="actionSheetSubtitle" class="action-sheet-subtitle">File • 123 KB</div>
+                </div>
+                <div id="actionSheetIcon" class="action-sheet-header-icon"></div>
+            </div>
+            <button class="action-sheet-item" data-action="download">
+                <svg viewBox="0 0 24 24"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-8 2v2h16v-2H4z"/></svg>
+                Download
+            </button>
+            <button class="action-sheet-item" data-action="downloadZip">
+                <svg viewBox="0 0 24 24"><path d="M20 6h-8l-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-2 6h-2v2h2v2h-2v2h-2v-2h2v-2h-2v-2h2v-2h-2V8h2v2h2v2z"/></svg>
+                Download as ZIP
+            </button>
+            <button class="action-sheet-item" data-action="rename">
+                <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                Rename
+            </button>
+            <button class="action-sheet-item danger" data-action="delete">
+                <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                Delete
+            </button>
+        </div>
+    </div>
+
+    <!-- File Preview Modal -->
+    <div id="previewOverlay" class="preview-overlay">
+        <div class="preview-header">
+            <span id="previewTitle" class="preview-title">filename.txt</span>
+            <div class="preview-actions">
+                <button id="previewDownloadBtn" class="preview-btn download" title="Download">
+                    <svg viewBox="0 0 24 24"><path d="M12 16l-6-6h4V4h4v6h4l-6 6zm-8 2v2h16v-2H4z"/></svg>
+                </button>
+                <button id="previewCloseBtn" class="preview-btn" title="Close">
+                    <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+                </button>
+            </div>
+        </div>
+        <div id="previewContent" class="preview-content">
+            <!-- Dynamic content inserted here -->
         </div>
     </div>
 

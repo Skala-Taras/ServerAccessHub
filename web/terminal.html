@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>bash - Terminal</title>
+    <!-- xterm.js from CDN -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        html, body { 
+            height: 100%; 
+            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+            background: #000;
+            color: #aaa;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Header bar */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 10px;
+            background: #222;
+            border-bottom: 1px solid #444;
+            flex-shrink: 0;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .back-link {
+            color: #0a0;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .back-link:hover { 
+            color: #0f0;
+            text-decoration: underline;
+        }
+        
+        .title {
+            color: #0f0;
+            font-size: 13px;
+            font-weight: bold;
+        }
+        
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            color: #888;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #888;
+        }
+        .status-dot.connected { background: #0f0; }
+        .status-dot.disconnected { background: #f00; }
+        .status-dot.connecting { 
+            background: #ff0; 
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .btn {
+            background: #333;
+            border: 1px solid #555;
+            color: #aaa;
+            padding: 4px 10px;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background: #444;
+            color: #fff;
+        }
+
+        /* Terminal */
+        #terminal {
+            flex: 1;
+            background: #000;
+            overflow: hidden;
+            min-height: 0;
+        }
+        
+        .xterm {
+            height: 100%;
+            padding: 2px;
+        }
+        
+        .xterm-screen {
+            height: 100% !important;
+        }
+        
+        .xterm-viewport::-webkit-scrollbar {
+            width: 10px;
+            background: #111;
+        }
+        .xterm-viewport::-webkit-scrollbar-thumb {
+            background: #444;
+        }
+        
+        /* Fullscreen mode */
+        body.fullscreen .header {
+            display: none;
+        }
+        body.fullscreen #terminal {
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <a href="/" class="back-link">[← back]</a>
+                <span class="title">user@server:~$</span>
+            </div>
+            <div class="header-right">
+                <div class="status">
+                    <span id="statusDot" class="status-dot connecting"></span>
+                    <span id="statusText">...</span>
+                </div>
+                <button class="btn" onclick="copySelection()">copy</button>
+                <button class="btn" onclick="pasteClipboard()">paste</button>
+                <button class="btn" onclick="clearTerminal()">clear</button>
+                <button class="btn" onclick="reconnect()">reconnect</button>
+                <button class="btn" onclick="toggleFullscreen()" id="fsBtn">fullscreen</button>
+            </div>
+        </div>
+        <div id="terminal"></div>
+    </div>
+
+    <script>
+        let term;
+        let socket;
+        let fitAddon;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT = 5;
+
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const fsBtn = document.getElementById('fsBtn');
+
+        function initTerminal() {
+            term = new Terminal({
+                cursorBlink: true,
+                cursorStyle: 'block',
+                fontSize: 14,
+                fontFamily: "'Consolas', 'Monaco', 'Lucida Console', monospace",
+                scrollback: 5000,
+                scrollOnUserInput: true,
+                rightClickSelectsWord: true,
+                theme: {
+                    // Classic bash terminal colors
+                    background: '#000000',
+                    foreground: '#aaaaaa',
+                    cursor: '#ffffff',
+                    cursorAccent: '#000000',
+                    selection: 'rgba(255, 255, 255, 0.3)',
+                    // Standard ANSI colors
+                    black: '#000000',
+                    red: '#cc0000',
+                    green: '#4e9a06',
+                    yellow: '#c4a000',
+                    blue: '#3465a4',
+                    magenta: '#75507b',
+                    cyan: '#06989a',
+                    white: '#d3d7cf',
+                    // Bright variants
+                    brightBlack: '#555753',
+                    brightRed: '#ef2929',
+                    brightGreen: '#8ae234',
+                    brightYellow: '#fce94f',
+                    brightBlue: '#729fcf',
+                    brightMagenta: '#ad7fa8',
+                    brightCyan: '#34e2e2',
+                    brightWhite: '#eeeeec'
+                },
+                allowProposedApi: true
+            });
+
+            fitAddon = new FitAddon.FitAddon();
+            term.loadAddon(fitAddon);
+            
+            // Web links addon
+            const webLinksAddon = new WebLinksAddon.WebLinksAddon();
+            term.loadAddon(webLinksAddon);
+            
+            term.open(document.getElementById('terminal'));
+            
+            // Fit terminal to container with slight delay
+            setTimeout(() => {
+                fitAddon.fit();
+            }, 50);
+
+            term.onData(data => {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(data);
+                }
+            });
+
+            // Right-click to copy selection or paste
+            term.element.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const sel = term.getSelection();
+                if (sel) {
+                    // Has selection - copy it
+                    navigator.clipboard.writeText(sel).then(() => {
+                        term.clearSelection();
+                        showNotification('Copied!');
+                    });
+                } else {
+                    // No selection - paste
+                    navigator.clipboard.readText().then(text => {
+                        if (text && socket && socket.readyState === WebSocket.OPEN) {
+                            socket.send(text);
+                        }
+                    });
+                }
+            });
+
+            // Double-click selects word
+            term.element.addEventListener('dblclick', () => {
+                const sel = term.getSelection();
+                if (sel) {
+                    navigator.clipboard.writeText(sel).then(() => {
+                        showNotification('Copied: ' + sel.substring(0, 20) + (sel.length > 20 ? '...' : ''));
+                    });
+                }
+            });
+
+            // Auto-scroll to bottom on new output
+            term.onWriteParsed(() => {
+                term.scrollToBottom();
+            });
+
+            window.addEventListener('resize', () => {
+                setTimeout(() => {
+                    fitAddon.fit();
+                    sendResize();
+                }, 50);
+            });
+
+            setTimeout(() => {
+                fitAddon.fit();
+                sendResize();
+            }, 150);
+        }
+
+        function sendResize() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                const dims = { cols: term.cols, rows: term.rows };
+                socket.send('\x1b[RESIZE:' + JSON.stringify(dims) + '\x1b[');
+            }
+        }
+
+        function setStatus(status, text) {
+            statusDot.className = 'status-dot ' + status;
+            statusText.textContent = text;
+        }
+
+        function connect() {
+            setStatus('connecting', 'connecting...');
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            socket = new WebSocket(protocol + '//' + window.location.host + '/terminal-ws');
+
+            socket.onopen = () => {
+                setStatus('connected', 'connected');
+                reconnectAttempts = 0;
+                setTimeout(sendResize, 100);
+                // Set LS_COLORS to use only text colors, no backgrounds
+                setTimeout(() => {
+                    socket.send('export LS_COLORS="di=34:ln=36:so=35:pi=33:ex=32:bd=33:cd=33:su=31:sg=31:tw=34:ow=34"\n');
+                    socket.send('clear\n');
+                }, 200);
+            };
+
+            socket.onmessage = (event) => {
+                term.write(event.data);
+            };
+
+            socket.onclose = () => {
+                setStatus('disconnected', 'disconnected');
+                if (reconnectAttempts < MAX_RECONNECT) {
+                    reconnectAttempts++;
+                    setTimeout(connect, Math.min(1000 * reconnectAttempts, 5000));
+                }
+            };
+
+            socket.onerror = () => {
+                setStatus('disconnected', 'error');
+            };
+        }
+
+        function clearTerminal() {
+            term.clear();
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send('clear\n');
+            }
+        }
+
+        function reconnect() {
+            if (socket) socket.close();
+            reconnectAttempts = 0;
+            term.clear();
+            connect();
+        }
+
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().then(() => {
+                    document.body.classList.add('fullscreen');
+                    fsBtn.textContent = 'exit';
+                    setTimeout(() => fitAddon.fit(), 100);
+                }).catch(() => {
+                    // Fallback
+                    document.body.classList.add('fullscreen');
+                    fsBtn.textContent = 'exit';
+                    setTimeout(() => fitAddon.fit(), 100);
+                });
+            } else {
+                document.exitFullscreen().then(() => {
+                    document.body.classList.remove('fullscreen');
+                    fsBtn.textContent = 'fullscreen';
+                    setTimeout(() => fitAddon.fit(), 100);
+                });
+            }
+        }
+
+        // Copy selected text from terminal
+        function copySelection() {
+            const sel = term.getSelection();
+            if (sel) {
+                navigator.clipboard.writeText(sel).then(() => {
+                    showNotification('Copied!');
+                    term.clearSelection();
+                });
+            } else {
+                showNotification('Select text first');
+            }
+        }
+
+        // Paste from clipboard to terminal
+        function pasteClipboard() {
+            navigator.clipboard.readText().then(text => {
+                if (text && socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(text);
+                    showNotification('Pasted');
+                }
+            }).catch(() => {
+                showNotification('Clipboard access denied');
+            });
+        }
+
+        // Show notification
+        function showNotification(msg) {
+            const notif = document.createElement('div');
+            notif.textContent = msg;
+            notif.style.cssText = 'position:fixed;top:50px;right:20px;background:#333;color:#0f0;padding:8px 16px;border-radius:4px;font-size:12px;z-index:9999;';
+            document.body.appendChild(notif);
+            setTimeout(() => notif.remove(), 1500);
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                e.preventDefault();
+                copySelection();
+            }
+            if (e.ctrlKey && e.shiftKey && e.key === 'V') {
+                e.preventDefault();
+                pasteClipboard();
+            }
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            if (!document.fullscreenElement) {
+                document.body.classList.remove('fullscreen');
+                fsBtn.textContent = 'fullscreen';
+                setTimeout(() => fitAddon.fit(), 100);
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initTerminal();
+            connect();
+        });
+    </script>
+</body>
+</html>

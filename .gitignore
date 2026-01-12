@@ -28,8 +28,14 @@ replay_pid*
 
 # VS Code
 .vscode/
+
+# Environment files (secrets)
+.env
+.env.yml
+ansible/.env
+ansible/.env.yml
 .history/
 
 *.jks
-
+docs/*
 CloudStorage/*
