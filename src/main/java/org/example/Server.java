@@ -60,12 +60,21 @@ public class Server {
     private static final File ROOT_DIR = new File("cloudStorage");
 
     /**
-     * Load a value from .env file in project root.
+     * Load a value from environment variable or .env file.
      * 
-     * @param key The key to look for (e.g., "key-password")
+     * <p>Priority: 1) System environment variable, 2) .env file in working directory</p>
+     * 
+     * @param key The key to look for (e.g., "KEYSTORE_PASSWORD")
      * @return The value associated with the key, or empty string if not found
      */
     private static String loadEnvValue(String key) {
+        // First, try system environment variable (works in Docker)
+        String envValue = System.getenv(key);
+        if (envValue != null && !envValue.isEmpty()) {
+            return envValue;
+        }
+        
+        // Fallback: try .env file (for local development)
         try (BufferedReader reader = new BufferedReader(new FileReader(".env"))) {
             String line;
             while ((line = reader.readLine()) != null) {
@@ -74,14 +83,14 @@ public class Server {
                 int idx = line.indexOf('=');
                 if (idx > 0) {
                     String envKey = line.substring(0, idx).trim();
-                    String envValue = line.substring(idx + 1).trim();
+                    String fileValue = line.substring(idx + 1).trim();
                     if (envKey.equals(key)) {
-                        return envValue;
+                        return fileValue;
                     }
                 }
             }
         } catch (IOException e) {
-            System.err.println("WARNING: Could not read .env file: " + e.getMessage());
+            System.err.println("INFO: .env file not found, using environment variables only");
         }
         return "";
     }
