@@ -54,11 +54,37 @@ public class Server {
     /** Server listening port (HTTPS) */
     private static final int PORT = 8080;
     
-    /** Password for SSL keystore file */
-    private static final String KEYSTORE_PASS = "skala123";
-    
-    /** Root directory for file storage sandbox */
+    /** Password for SSL keystore file (loaded from .env) */
+    private static final String KEYSTORE_PASS = loadEnvValue("KEYSTORE_PASSWORD");
+
     private static final File ROOT_DIR = new File("cloudStorage");
+
+    /**
+     * Load a value from .env file in project root.
+     * 
+     * @param key The key to look for (e.g., "key-password")
+     * @return The value associated with the key, or empty string if not found
+     */
+    private static String loadEnvValue(String key) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(".env"))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (line.isEmpty() || line.startsWith("#")) continue;
+                int idx = line.indexOf('=');
+                if (idx > 0) {
+                    String envKey = line.substring(0, idx).trim();
+                    String envValue = line.substring(idx + 1).trim();
+                    if (envKey.equals(key)) {
+                        return envValue;
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("WARNING: Could not read .env file: " + e.getMessage());
+        }
+        return "";
+    }
 
     /**
      * Start the HTTPS server and begin accepting connections.

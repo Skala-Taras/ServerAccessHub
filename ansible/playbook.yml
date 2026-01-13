@@ -108,6 +108,7 @@
         content: |
           TAILSCALE_IP={{ tailscale_ip }}
           USER={{ user }}
+          KEYSTORE_PASSWORD={{ keystore_password }}
         dest: "{{ app_dir }}/.env"
         mode: '0644'
 
