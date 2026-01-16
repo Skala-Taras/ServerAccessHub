@@ -73,12 +73,16 @@
         path: "{{ app_dir }}"
         state: directory
         mode: '0755'
+        owner : "{{ ansible_user }}"
+        group : "{{ ansible_user }}"
 
     - name: Clone repository
       git:
         repo: "{{ github_repo }}"
         dest: "{{ app_dir }}"
         force: yes
+        become: yes
+        become_user: "{{ ansible_user }}"
       
     # Generate SSL certificate
     - name: Generate SSL keystore
@@ -108,6 +112,7 @@
         content: |
           TAILSCALE_IP={{ tailscale_ip }}
           USER={{ user }}
+          KEYSTORE_PASSWORD={{ keystore_password }}
         dest: "{{ app_dir }}/.env"
         mode: '0644'
 

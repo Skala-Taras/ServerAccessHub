@@ -54,10 +54,10 @@ public class Server {
     /** Server listening port (HTTPS) */
     private static final int PORT = 8080;
     
-    /** Password for SSL keystore file */
-    private static final String KEYSTORE_PASS = "skala123";
-    
-    /** Root directory for file storage sandbox */
+    /** Password for SSL keystore file (loaded from .env) */
+    // private static final String KEYSTORE_PASS = getenv("KEYSTORE_PASSWORD");
+    private static final String KEYSTORE_PASS = Config.getRequired("KEYSTORE_PASSWORD");
+
     private static final File ROOT_DIR = new File("cloudStorage");
 
     /**

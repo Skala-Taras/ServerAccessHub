@@ -13,6 +13,11 @@ RUN mvn package -DskipTests -q
 # --- STAGE 2: Runtime ---
 FROM eclipse-temurin:21-jdk
 
+
+# Creating a non-root group and user inside the container
+RUN groupadd -g 1000 appgroup && \
+    useradd -u 1000 -g appgroup -m -s /bin/bash appuser
+
 # Install terminal tools for web shell
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
@@ -36,23 +41,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean
 
 # Set working directory
-WORKDIR /home/{{ USER }}/app
+WORKDIR /app
 
-# Copy compiled JAR from build stage
-COPY --from=build /build/target/*.jar app.jar
-
-# Copy web frontend
-COPY web ./web
-
-# Copy SSL certificate
-COPY keystore.jks .
+# Copy files
+COPY --chown=appuser:appgroup --from=build /build/target/*.jar app.jar
+COPY --chown=appuser:appgroup web ./web
+COPY --chown=appuser:appgroup keystore.jks .
 
 # Create cloudStorage directory
-RUN mkdir -p /home/{{ USER }}/app/cloudStorage
+RUN mkdir -p /app/cloudStorage && chown -R appuser:appgroup /app/cloudStorage
 
 # Set environment variables
 ENV LANG=en_US.UTF-8
 ENV TERM=xterm-256color
+
+# Switch to non-root user
+USER appuser
 
 # Expose HTTPS port
 EXPOSE 8080

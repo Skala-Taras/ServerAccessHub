@@ -5,9 +5,12 @@ services:
       dockerfile: Dockerfile
     container_name: serveraccesshub
     
+    env_file:
+      - .env
+
     ports:
-      - "${TAILSCALE_IP:-127.0.0.1}:8080:8080"
-    
+      #- "${TAILSCALE_IP:-127.0.0.1}:8080:8080"
+      - 9090:8080
     volumes:
       - ./cloudStorage:/app/cloudStorage
     
