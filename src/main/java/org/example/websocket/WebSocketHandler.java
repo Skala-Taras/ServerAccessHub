@@ -6,89 +6,14 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
 /**
- * WebSocket Handler - RFC 6455 Frame Processing and Command Routing
+ * WebSocket Handler.
+ * Processes WebSocket frames and routes file system commands.
  * 
- * <p>Implements the WebSocket protocol for real-time bidirectional communication.
- * Handles frame encoding/decoding and routes commands to FileSystemService.</p>
- * 
- * <h2>Supported Commands:</h2>
- * <table border="1">
- *   <tr><th>Command</th><th>Description</th><th>Response</th></tr>
- *   <tr><td>ls</td><td>List current directory</td><td>LIST: [files]</td></tr>
- *   <tr><td>pwd</td><td>Print working directory</td><td>PATH: /current/path</td></tr>
- *   <tr><td>cd [dir]</td><td>Change directory</td><td>RES: OK or ERR</td></tr>
- *   <tr><td>mkdir [name]</td><td>Create folder</td><td>RES: OK or ERR</td></tr>
- *   <tr><td>rm [name]</td><td>Delete file/folder</td><td>RES: OK or ERR</td></tr>
- *   <tr><td>rename [old]\t[new]</td><td>Rename item</td><td>RES: OK or ERR</td></tr>
- *   <tr><td>goto [path]</td><td>Jump to absolute path</td><td>RES: OK or ERR</td></tr>
- *   <tr><td>suggest [query]</td><td>Autocomplete folders</td><td>SUGGEST: folder1|folder2|</td></tr>
- *   <tr><td>undo</td><td>Undo last cd</td><td>RES: OK or ERR</td></tr>
- * </table>
- * 
- * <h2>WebSocket Frame Format (RFC 6455):</h2>
- * <pre>
- *  0                   1                   2                   3
- *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- * +-+-+-+-+-------+-+-------------+-------------------------------+
- * |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
- * |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
- * |N|V|V|V|       |S|             |   (if payload len==126/127)   |
- * | |1|2|3|       |K|             |                               |
- * +-+-+-+-+-------+-+-------------+ - - - - - - - - - - - - - - - +
- * |     Extended payload length continued,// Find closeAllContextMenus and change from:
-
-function closeAllContextMenus() {
-    let activeCtxMenu = null;  // ❌ REMOVE THIS LINE - causes the redeclaration error
-    
-    if (activeCtxMenu) {
-        activeCtxMenu.classList.remove('active');
-        activeCtxMenu = null;
-    }
-}
-
-// Change to:
-
-function closeAllContextMenus() {
-    if (activeCtxMenu) {
-        activeCtxMenu.classList.remove('active');
-        activeCtxMenu = null;
-    }
-} if payload len == 127  |
- * + - - - - - - - - - - - - - - - +-------------------------------+
- * |                               |Masking-key, if MASK set to 1  |
- * +-------------------------------+-------------------------------+
- * | Masking-key (continued)       |          Payload Data         |
- * +-------------------------------- - - - - - - - - - - - - - - - +
- * :                     Payload Data continued ...                :
- * +---------------------------------------------------------------+
- * </pre>
- * 
- * @author ServerAccessHub Team
- * @version 2.0.0
- * @see WebSocketUtils
- * @see FileSystemService
- * @see <a href="https://datatracker.ietf.org/doc/html/rfc6455#section-5">RFC 6455 Section 5 - Data Framing</a>
+ * Commands: ls, pwd, cd, mkdir, rm, rename, goto, suggest, undo
  */
 public class WebSocketHandler {
 
-    /**
-     * Handle a WebSocket connection from handshake through message exchange.
-     * 
-     * <p>This method:</p>
-     * <ol>
-     *   <li>Completes the WebSocket handshake (HTTP 101 response)</li>
-     *   <li>Enters loop reading frames from client</li>
-     *   <li>Processes each command and sends response</li>
-     *   <li>Exits on CLOSE frame or connection error</li>
-     * </ol>
-     * 
-     * @param socket The client socket (for closing on error)
-     * @param in Input stream (positioned after HTTP headers)
-     * @param out Output stream for responses
-     * @param request Original HTTP request (for extracting Sec-WebSocket-Key)
-     * @param fs FileSystemService instance for this client
-     * @throws IOException if handshake fails or connection drops
-     */
+    /** Handle WebSocket connection. Completes handshake and processes commands. */
     public static void handle(Socket socket, InputStream in, OutputStream out, String request, FileSystemService fs) throws IOException {
         // Complete WebSocket handshake
         String handshake = WebSocketUtils.createHandshakeResponse(request);
@@ -114,10 +39,7 @@ public class WebSocketHandler {
         }
     }
 
-    /**
-     * Stream directory listing in chunks for responsive UI.
-     * Sends files in batches of CHUNK_SIZE so UI can start rendering immediately.
-     */
+    /** Stream directory listing in chunks for responsive UI. */
     private static final int CHUNK_SIZE = 30;
     
     private static void streamDirectoryListing(OutputStream out, FileSystemService fs) throws IOException {
@@ -163,16 +85,7 @@ public class WebSocketHandler {
         sendText(out, "LIST_END: " + files.length);
     }
 
-    /**
-     * Process a command string and return the response.
-     * 
-     * <p>Commands are simple text strings with space-separated arguments.
-     * The rename command uses TAB separator to allow spaces in filenames.</p>
-     * 
-     * @param command The command string from client (e.g., "cd Documents")
-     * @param fs FileSystemService for executing file operations
-     * @return Response string prefixed with type (LIST:, PATH:, RES:, ERR:, SUGGEST:)
-     */
+    /** Process a command and return the response. */
     private static String processCommand(String command, FileSystemService fs) {
         try {
             // Split only on first space to preserve spaces in file/folder names
@@ -241,32 +154,7 @@ public class WebSocketHandler {
         }
     }
 
-    /**
-     * Read and decode a WebSocket text frame from input stream.
-     * 
-     * <p>Implements RFC 6455 frame decoding:</p>
-     * <ol>
-     *   <li>Read first byte: FIN bit (bit 7) + opcode (bits 0-3)</li>
-     *   <li>Read second byte: MASK bit (bit 7) + payload length (bits 0-6)</li>
-     *   <li>Handle extended length if needed (126 = 2 bytes, 127 = 8 bytes)</li>
-     *   <li>Read 4-byte masking key (required for client frames)</li>
-     *   <li>Read and XOR-unmask payload bytes</li>
-     *   <li>Return decoded UTF-8 string</li>
-     * </ol>
-     * 
-     * <h3>Opcodes:</h3>
-     * <ul>
-     *   <li>0x1 = Text frame (what we process)</li>
-     *   <li>0x2 = Binary frame</li>
-     *   <li>0x8 = Close frame (triggers return null)</li>
-     *   <li>0x9 = Ping frame</li>
-     *   <li>0xA = Pong frame</li>
-     * </ul>
-     * 
-     * @param in Input stream to read from
-     * @return Decoded text message, or null on CLOSE frame or connection end
-     * @throws IOException if read fails
-     */
+    /** Read and decode a WebSocket text frame. Returns null on close or error. */
     private static String readTextFrame(InputStream in) throws IOException {
         // Byte 1: FIN (bit 7) + RSV1-3 (bits 4-6) + Opcode (bits 0-3)
         int b1 = in.read(); 
@@ -304,22 +192,7 @@ public class WebSocketHandler {
         return new String(payload, StandardCharsets.UTF_8);
     }
 
-    /**
-     * Encode and send a WebSocket text frame to client.
-     * 
-     * <p>Server-to-client frames are NOT masked (per RFC 6455).</p>
-     * 
-     * <h3>Frame Structure:</h3>
-     * <ul>
-     *   <li>Byte 1: 0x81 = FIN=1, RSV=0, Opcode=1 (text)</li>
-     *   <li>Byte 2+: Payload length (1, 3, or 9 bytes)</li>
-     *   <li>Remaining: Payload data (UTF-8)</li>
-     * </ul>
-     * 
-     * @param out Output stream to write to
-     * @param msg Text message to send
-     * @throws IOException if write fails
-     */
+    /** Send text message as WebSocket frame. */
     private static void sendText(OutputStream out, String msg) throws IOException {
         byte[] data = msg.getBytes(StandardCharsets.UTF_8);
         

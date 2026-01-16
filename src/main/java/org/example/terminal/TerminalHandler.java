@@ -38,17 +38,7 @@ public class TerminalHandler {
     /** Shell to execute */
     private static final String SHELL = "/bin/bash";
 
-    /**
-     * Handle a terminal WebSocket connection.
-     * 
-     * <p>Completes WebSocket handshake, spawns bash process, and enters
-     * bidirectional streaming loop until client disconnects or process exits.</p>
-     * 
-     * @param socket Client socket
-     * @param in Input stream (after HTTP headers)
-     * @param out Output stream
-     * @param request Original HTTP request for handshake
-     */
+    /** Handle terminal WebSocket connection. Spawns bash and streams I/O. */
     public static void handle(Socket socket, InputStream in, OutputStream out, String request) {
         Process process = null;
         AtomicBoolean running = new AtomicBoolean(true);
@@ -146,12 +136,7 @@ public class TerminalHandler {
         }
     }
 
-    /**
-     * Send text data as WebSocket frame.
-     * 
-     * @param out Output stream
-     * @param text Text to send
-     */
+    /** Send text as WebSocket frame. */
     private static synchronized void sendText(OutputStream out, String text) throws IOException {
         byte[] payload = text.getBytes(StandardCharsets.UTF_8);
         
@@ -175,12 +160,7 @@ public class TerminalHandler {
         out.flush();
     }
 
-    /**
-     * Read a text frame from WebSocket.
-     * 
-     * @param in Input stream
-     * @return Decoded text, or null on CLOSE frame/error
-     */
+    /** Read text frame from WebSocket. Returns null on close or error. */
     private static String readTextFrame(InputStream in) throws IOException {
         int b1 = in.read();
         if (b1 == -1) return null;

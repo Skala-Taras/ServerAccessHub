@@ -7,22 +7,15 @@ import java.nio.file.Paths;
 import java.util.Properties;
 
 /**
- * Configuration Utility
- * <p>Provides a single, reliable way to get configuration values.
- * It prioritizes system environment variables (used by Docker)
- * and falls back to a local .env file (used for local development).</p>
+ * Configuration loader.
+ * Reads from environment variables or .env file.
  */
 public class Config {
 
     private static final Properties properties = new Properties();
     private static boolean isFileLoaded = false;
 
-    /**
-     * Gets a configuration value.
-     *
-     * @param key The name of the configuration variable (e.g., "KEYSTORE_PASSWORD").
-     * @return The value, or null if not found.
-     */
+    /** Get config value by key. Checks env vars first, then .env file. */
     public static String get(String key) {
         // 1. PRIORITY: Check System/Docker Environment Variable
         String value = System.getenv(key);
@@ -30,19 +23,12 @@ public class Config {
             return value;
         }
 
-        // 2. FALLBACK: Load and check local .env file (for IDE development)
+        // 2. FALLBACK: Load from .env file
         loadEnvFileOnce();
         return properties.getProperty(key);
     }
 
-    /**
-     * Gets a required configuration value. Throws a clear error if it's missing.
-     * This prevents the server from starting in a broken state.
-     *
-     * @param key The name of the required configuration variable.
-     * @return The non-null, non-blank value.
-     * @throws RuntimeException if the configuration is missing.
-     */
+    /** Get required config value. Throws error if missing. */
     public static String getRequired(String key) {
         String value = get(key);
         if (value == null || value.isBlank()) {

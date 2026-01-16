@@ -10,80 +10,20 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 /**
- * HTTP Handler - Static File Serving, Uploads, and Downloads
- * 
- * <p>Handles all HTTP requests (non-WebSocket) including serving static files
- * from the web directory and managing file operations in cloudStorage.</p>
- * 
- * <h2>Supported Endpoints:</h2>
- * <table border="1">
- *   <tr><th>Method</th><th>Path</th><th>Description</th></tr>
- *   <tr><td>GET</td><td>/</td><td>Serve index.html</td></tr>
- *   <tr><td>GET</td><td>/[file]</td><td>Serve static file from /web</td></tr>
- *   <tr><td>GET</td><td>/download?name=path</td><td>Download file from cloudStorage</td></tr>
- *   <tr><td>PUT</td><td>/upload?path=path</td><td>Upload file to cloudStorage</td></tr>
- * </table>
- * 
- * <h2>Security Features:</h2>
- * <ul>
- *   <li>Path traversal protection using canonical path validation</li>
- *   <li>Sandbox enforcement - all operations restricted to cloudStorage</li>
- *   <li>Explicit ".." rejection in all path operations</li>
- *   <li>URL decoding with validation</li>
- *   <li>Content-Length required for uploads (prevents DoS)</li>
- * </ul>
- * 
- * <h2>Upload Flow:</h2>
- * <ol>
- *   <li>Validate Content-Length header (required, max 2GB)</li>
- *   <li>Resolve and validate target path</li>
- *   <li>Create parent directories if needed</li>
- *   <li>Stream to .part temp file</li>
- *   <li>Rename to final file on success</li>
- * </ol>
- * 
- * @author ServerAccessHub Team
- * @version 2.0.0
- * @see org.example.Server
+ * HTTP Handler.
+ * Serves static files and handles file uploads/downloads.
+ * All file operations are sandboxed to cloudStorage directory.
  */
 public class HTTPHandler {
     
-    /** Directory containing static web files (HTML, CSS, JS) */
     private static final String WEB_ROOT = "web";
-    
-    /** Root directory for file storage (sandboxed) */
     private static final File STORAGE_ROOT = new File("cloudStorage");
 
-    /** Maximum upload size: 2 GiB */
-    private static final long MAX_UPLOAD_BYTES = 2L * 1024 * 1024 * 1024;
-    
-    /** Threshold for ZIP compression: 3 GiB */
-    private static final long ZIP_THRESHOLD_BYTES = 3L * 1024 * 1024 * 1024;
-    
-    /** Buffer size for streaming I/O operations */
-    private static final int IO_BUFFER_SIZE = 128 * 1024; // 128 KB
+    private static final long MAX_UPLOAD_BYTES = 2L * 1024 * 1024 * 1024;  // 2GB
+    private static final long ZIP_THRESHOLD_BYTES = 3L * 1024 * 1024 * 1024; // 3GB
+    private static final int IO_BUFFER_SIZE = 128 * 1024; // 128KB
 
-    /**
-     * Main HTTP request router.
-     * 
-     * <p>Routes incoming HTTP requests to appropriate handler based on method and path.
-     * This method is called by Server after parsing HTTP headers.</p>
-     * 
-     * <h3>Why This Signature:</h3>
-     * <p>We receive pre-parsed components because:</p>
-     * <ul>
-     *   <li>Request body must be streamed (not buffered) for large uploads</li>
-     *   <li>Headers are already parsed with lowercase keys</li>
-     *   <li>Method and path extracted from request line</li>
-     * </ul>
-     * 
-     * @param bodyStream Input stream positioned at request body start
-     * @param out Output stream for sending response
-     * @param method HTTP method (GET, PUT, etc.)
-     * @param rawPath Request path with query string (e.g., "/download?name=file.txt")
-     * @param headers Map of headers with lowercase keys
-     * @throws IOException if I/O operation fails
-     */
+    /** Route HTTP request to appropriate handler based on method and path. */
     public static void handleHttpRequest(InputStream bodyStream, OutputStream out, String method, String rawPath, Map<String, String> headers) throws IOException {
         if (method == null || rawPath == null) {
             sendText(out, 400, "Bad Request", "Missing method/path");
@@ -141,16 +81,7 @@ public class HTTPHandler {
         sendText(out, 405, "Method Not Allowed", "Unsupported method");
     }
 
-    /**
-     * Serve a static file from the web directory.
-     * 
-     * <p>Uses streaming to avoid loading large files into memory.
-     * Determines Content-Type based on file extension.</p>
-     * 
-     * @param out Output stream for response
-     * @param name File name relative to WEB_ROOT (e.g., "script.js")
-     * @throws IOException if file cannot be read
-     */
+    /** Serve a static file from the web directory. */
     private static void serveStaticFile(OutputStream out, String name) throws IOException {
         // Validate filename
         if (name == null || name.isEmpty() || name.contains("..") || name.contains("\\") || name.contains("\u0000")) {
@@ -178,16 +109,7 @@ public class HTTPHandler {
         }
     }
 
-    /**
-     * Handle GET /download?name=relative/path endpoint.
-     * 
-     * <p>Streams file from cloudStorage with Content-Disposition header
-     * for browser download prompt. Uses canonical path validation to prevent traversal.</p>
-     * 
-     * @param out Output stream for response
-     * @param query Query string containing "name" parameter
-     * @throws IOException if file cannot be read
-     */
+    /** Handle file download from cloudStorage. */
     private static void handleDownload(OutputStream out, String query) throws IOException {
         Map<String, String> params = parseQuery(query);
         String nameEnc = params.get("name");
@@ -225,16 +147,7 @@ public class HTTPHandler {
         }
     }
 
-    /**
-     * Handle GET /downloadFolder?name=relative/path endpoint.
-     * 
-     * <p>For folders under 3GB: streams as uncompressed ZIP (fast).
-     * For folders 3GB+: streams as compressed ZIP (saves bandwidth).</p>
-     * 
-     * @param out Output stream for response
-     * @param query Query string containing "name" parameter (folder path)
-     * @throws IOException if folder cannot be read or ZIP creation fails
-     */
+    /** Handle folder download as ZIP archive. */
     private static void handleFolderDownload(OutputStream out, String query) throws IOException {
         Map<String, String> params = parseQuery(query);
         String nameEnc = params.get("name");
@@ -282,17 +195,7 @@ public class HTTPHandler {
         }
     }
 
-    /**
-     * Handle GET /downloadZip?name=path&type=file|folder endpoint.
-     * 
-     * <p>Creates a ZIP archive of a single file or folder and streams it.
-     * For files: wraps the single file in a ZIP archive.
-     * For folders: creates ZIP with all contents (same as downloadFolder).</p>
-     * 
-     * @param out Output stream for response
-     * @param query Query string containing "name" and "type" parameters
-     * @throws IOException if file cannot be read or ZIP creation fails
-     */
+    /** Handle single file or folder ZIP download. */
     private static void handleZipDownload(OutputStream out, String query) throws IOException {
         Map<String, String> params = parseQuery(query);
         String nameEnc = params.get("name");
@@ -363,9 +266,7 @@ public class HTTPHandler {
         }
     }
 
-    /**
-     * Calculate the total size of a folder recursively.
-     */
+    /** Calculate total size of a folder recursively. */
     private static long calculateFolderSize(File folder) {
         long size = 0;
         File[] files = folder.listFiles();
@@ -381,14 +282,7 @@ public class HTTPHandler {
         return size;
     }
 
-    /**
-     * Create a ZIP archive from a folder.
-     * 
-     * @param folder Source folder to compress
-     * @param zipFile Destination ZIP file
-     * @param compress If true, use DEFLATE compression; if false, use STORED (faster)
-     * @throws IOException if compression fails
-     */
+    /** Create ZIP archive from folder. */
     private static void createZipFromFolder(File folder, File zipFile, boolean compress) throws IOException {
         try (ZipOutputStream zos = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(zipFile), IO_BUFFER_SIZE))) {
             // Set compression level: 0 = no compression (fast), default = compressed
@@ -400,14 +294,7 @@ public class HTTPHandler {
         }
     }
 
-    /**
-     * Recursively add a folder and its contents to a ZIP output stream.
-     * 
-     * @param folder Current folder to add
-     * @param basePath Path prefix for ZIP entries
-     * @param zos ZIP output stream
-     * @throws IOException if file cannot be read
-     */
+    /** Recursively add folder contents to ZIP stream. */
     private static void addFolderToZip(File folder, String basePath, ZipOutputStream zos) throws IOException {
         File[] files = folder.listFiles();
         if (files == null) return;
@@ -436,15 +323,7 @@ public class HTTPHandler {
         }
     }
 
-    /**
-     * Resolve a storage path, allowing root folder itself (for folder downloads).
-     * Similar to resolveStoragePath but allows downloading the entire cloudStorage.
-     * 
-     * @param urlEncodedPath URL-encoded relative path from request
-     * @return Canonical File object within sandbox
-     * @throws IOException if canonical path cannot be resolved
-     * @throws SecurityException if path escapes sandbox or contains traversal
-     */
+    /** Resolve storage path, allowing root folder. Used for folder downloads. */
     private static File resolveStoragePathAllowRoot(String urlEncodedPath) throws IOException {
         // Decode URL encoding
         String decoded = URLDecoder.decode(urlEncodedPath, StandardCharsets.UTF_8);
@@ -517,34 +396,7 @@ public class HTTPHandler {
         return "application/octet-stream";
     }
 
-    /**
-     * Handle PUT /upload?path=relative/path/to/file endpoint.
-     * 
-     * <p>Receives file data from request body and stores in cloudStorage.
-     * Uses .part temp file to prevent partial/corrupted files.</p>
-     * 
-     * <h3>Requirements:</h3>
-     * <ul>
-     *   <li>Content-Length header required (HTTP 411 if missing)</li>
-     *   <li>Max size: 2GB (HTTP 413 if exceeded)</li>
-     *   <li>Path must stay within cloudStorage sandbox</li>
-     * </ul>
-     * 
-     * <h3>Upload Process:</h3>
-     * <ol>
-     *   <li>Validate headers and path</li>
-     *   <li>Create parent directories if needed</li>
-     *   <li>Stream to filename.part temp file</li>
-     *   <li>On success, rename .part to final name</li>
-     *   <li>On error, delete .part file</li>
-     * </ol>
-     * 
-     * @param bodyStream Input stream with file data
-     * @param out Output stream for response
-     * @param query Query string containing "path" parameter
-     * @param headers Request headers for Content-Length
-     * @throws IOException if upload fails
-     */
+    /** Handle file upload. Streams to .part temp file, then renames on success. */
     private static void handleUploadPut(InputStream bodyStream, OutputStream out, String query, Map<String, String> headers) throws IOException {
         Map<String, String> params = parseQuery(query);
         String pathEnc = params.get("path");
@@ -616,12 +468,7 @@ public class HTTPHandler {
         sendText(out, 200, "OK", "Uploaded");
     }
 
-    /**
-     * Parse Content-Length header value.
-     * 
-     * @param headers Map of headers with lowercase keys
-     * @return Content length as long, or -1 if missing/invalid
-     */
+    /** Parse Content-Length header value. Returns -1 if missing or invalid. */
     private static long parseContentLength(Map<String, String> headers) {
         if (headers == null) return -1;
         String v = headers.get("content-length");
@@ -634,23 +481,7 @@ public class HTTPHandler {
         }
     }
 
-    /**
-     * Resolve a user-provided path within the cloudStorage sandbox.
-     * 
-     * <p>Performs extensive validation to prevent directory traversal attacks:</p>
-     * <ul>
-     *   <li>URL-decodes the path</li>
-     *   <li>Rejects null bytes and Windows drive letters</li>
-     *   <li>Explicitly rejects ".." in any path segment</li>
-     *   <li>Uses canonical paths to resolve symlinks</li>
-     *   <li>Verifies final path is under STORAGE_ROOT</li>
-     * </ul>
-     * 
-     * @param urlEncodedPath URL-encoded relative path from request
-     * @return Canonical File object within sandbox
-     * @throws IOException if canonical path cannot be resolved
-     * @throws SecurityException if path escapes sandbox or contains traversal
-     */
+    /** Resolve and validate path within cloudStorage sandbox. Prevents directory traversal. */
     private static File resolveStoragePath(String urlEncodedPath) throws IOException {
         // Decode URL encoding
         String decoded = URLDecoder.decode(urlEncodedPath, StandardCharsets.UTF_8);
@@ -683,12 +514,7 @@ public class HTTPHandler {
         return target;
     }
 
-    /**
-     * Parse query string into parameter map.
-     * 
-     * @param query Query string (e.g., "name=value&foo=bar")
-     * @return Map of parameter names to values (not URL-decoded)
-     */
+    /** Parse query string into key-value map. */
     private static Map<String, String> parseQuery(String query) {
         Map<String, String> m = new HashMap<>();
         if (query == null || query.isEmpty()) return m;
@@ -703,18 +529,7 @@ public class HTTPHandler {
         return m;
     }
 
-    /**
-     * Stream exactly expectedBytes from input to output.
-     * 
-     * <p>Critical for HTTP body handling - must read exactly Content-Length bytes
-     * so connection can be properly reused or closed.</p>
-     * 
-     * @param in Input stream to read from
-     * @param out Output stream to write to
-     * @param expectedBytes Exact number of bytes to transfer
-     * @throws IOException if read/write fails
-     * @throws EOFException if input ends before expected bytes read
-     */
+    /** Stream exact number of bytes from input to output. */
     private static void pipe(InputStream in, OutputStream out, long expectedBytes) throws IOException {
         byte[] buf = new byte[IO_BUFFER_SIZE];
         long remaining = expectedBytes;
@@ -728,17 +543,7 @@ public class HTTPHandler {
         out.flush();
     }
 
-    /**
-     * Write HTTP response headers.
-     * 
-     * @param out Output stream
-     * @param code HTTP status code (e.g., 200, 404)
-     * @param reason HTTP reason phrase (e.g., "OK", "Not Found")
-     * @param contentType MIME type for Content-Type header
-     * @param contentLength Body length for Content-Length header
-     * @param extraHeader Optional additional header line (null to skip)
-     * @throws IOException if write fails
-     */
+    /** Write HTTP response headers. */
     private static void writeHeaders(OutputStream out, int code, String reason, String contentType, long contentLength, String extraHeader) throws IOException {
         out.write(("HTTP/1.1 " + code + " " + reason + "\r\n").getBytes(StandardCharsets.ISO_8859_1));
         out.write(("Connection: close\r\n").getBytes(StandardCharsets.ISO_8859_1));
@@ -749,15 +554,7 @@ public class HTTPHandler {
         out.flush();
     }
 
-    /**
-     * Send a plain text HTTP response.
-     * 
-     * @param out Output stream
-     * @param code HTTP status code
-     * @param reason HTTP reason phrase
-     * @param text Response body text
-     * @throws IOException if write fails
-     */
+    /** Send plain text HTTP response. */
     private static void sendText(OutputStream out, int code, String reason, String text) throws IOException {
         byte[] body = (text == null ? "" : text).getBytes(StandardCharsets.UTF_8);
         writeHeaders(out, code, reason, "text/plain; charset=UTF-8", body.length, null);
