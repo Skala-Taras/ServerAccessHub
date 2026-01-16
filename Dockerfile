@@ -14,10 +14,6 @@ RUN mvn package -DskipTests -q
 FROM eclipse-temurin:21-jdk
 
 
-# Creating a non-root group and user inside the container
-RUN groupadd -g 1000 appgroup && \
-    useradd -u 1000 -g appgroup -m -s /bin/bash appuser
-
 # Install terminal tools for web shell
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
