@@ -44,19 +44,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Copy files
-COPY --chown=appuser:appgroup --from=build /build/target/*.jar app.jar
-COPY --chown=appuser:appgroup web ./web
-COPY --chown=appuser:appgroup keystore.jks .
+COPY --chown=ubuntu:ubuntu --from=build /build/target/*.jar app.jar
+COPY --chown=ubuntu:ubuntu web ./web
+COPY --chown=ubuntu:ubuntu keystore.jks .
 
 # Create cloudStorage directory
-RUN mkdir -p /app/cloudStorage && chown -R appuser:appgroup /app/cloudStorage
+RUN mkdir -p /app/cloudStorage && chown -R ubuntu:ubuntu /app/cloudStorage
 
 # Set environment variables
 ENV LANG=en_US.UTF-8
 ENV TERM=xterm-256color
 
 # Switch to non-root user
-USER appuser
+USER ubuntu
 
 # Expose HTTPS port
 EXPOSE 8080
