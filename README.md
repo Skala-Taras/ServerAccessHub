@@ -155,8 +155,3 @@ The server implements the WebSocket protocol (RFC 6455) manually:
 4. The main thread reads WebSocket frames from the browser (keystrokes) and writes them to bash stdin.
 5. When the client disconnects, the bash process is destroyed.
 
----
-
-## License
-
-MIT
