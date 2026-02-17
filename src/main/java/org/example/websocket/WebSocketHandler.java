@@ -29,7 +29,7 @@ public class WebSocketHandler {
             String msg = readTextFrame(in);
             if (msg == null) break; // CLOSE frame or connection error
             
-            // Special handling for ls command - stream results in chunks
+            // Special handling for ls command
             if ("ls".equalsIgnoreCase(msg.trim())) {
                 streamDirectoryListing(out, fs);
             } else {

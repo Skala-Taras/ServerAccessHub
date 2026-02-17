@@ -13,7 +13,6 @@ RUN mvn package -DskipTests -q
 # --- STAGE 2: Runtime ---
 FROM eclipse-temurin:21-jdk
 
-
 # Install terminal tools for web shell
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \

@@ -1,219 +1,102 @@
 # ServerAccessHub
 
-Personal cloud storage application with a web-based file browser and terminal, deployed in Docker.
+A personal cloud storage application with a web-based file manager and an in-browser terminal, built entirely in **pure Java 21** without any frameworks. The server handles HTTPS, HTTP routing, WebSocket communication, and process management from scratch using only the Java standard library.
+
+---
+
+## Main Idea
+
+ServerAccessHub turns any Linux machine into a private cloud server. Once deployed inside a Docker container, it exposes a single HTTPS port that serves two web interfaces:
+
+1. **File Browser** — a mobile-friendly single-page application for managing files (upload, download, rename, delete, preview, folder ZIP download).
+2. **Web Terminal** — a fully interactive bash shell running in the browser via [xterm.js](https://xtermjs.org/).
+
+All communication is encrypted with TLS. The server runs as a self-contained Java JAR — no Spring, no Jetty, no external web server.
+
+---
+
+## How It Works
+
+### Architecture Overview
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                        Browser                           │
+│  ┌─────────────────┐           ┌────────────────────┐    │
+│  │  index.html     │           │  terminal.html     │    │
+│  │  (File Browser) │           │  (xterm.js shell)  │    │
+│  └────────┬────────┘           └─────────┬──────────┘    │
+│           │ WebSocket (wss://)           │ WebSocket     │
+└───────────┼──────────────────────────────┼───────────────┘
+            │                              │
+┌───────────▼──────────────────────────────▼───────────────┐
+│                  Server.java (HTTPS)                     │
+│         SSLServerSocket on port 8080                     │
+│                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌────────────────┐  │
+│  │ HTTPHandler  │  │ WebSocket    │  │ Terminal       │  │
+│  │              │  │ Handler      │  │ Handler        │  │
+│  │ Static files │  │ File system  │  │ /bin/bash      │  │
+│  │ Upload(PUT)  │  │ commands:    │  │ via Process    │  │
+│  │ Download(GET)│  │ ls, cd, rm,  │  │ Builder        │  │
+│  │ ZIP folders  │  │ mkdir, rename│  │                │  │
+│  └──────────────┘  └──────┬───────┘  └────────────────┘  │
+│                           │                              │
+│                  ┌────────▼────────┐                     │
+│                  │ FileSystem      │                     │
+│                  │ Service         │                     │
+│                  │ (sandboxed to   │                     │
+│                  │  cloudStorage/) │                     │
+│                  └─────────────────┘                     │
+└──────────────────────────────────────────────────────────┘
+```
+
+### Request Flow
+
+1. **Client connects** to `https://host:8080`. The `Server` class accepts the TLS socket and spawns a new thread.
+2. **HTTP request is parsed** manually — the server reads raw bytes, detects `\r\n\r\n` (end of headers), and extracts the method, path, and headers.
+3. **Routing decision:**
+   - If the request contains `Upgrade: websocket` header → the server performs the RFC 6455 handshake (SHA-1 + Base64 of the `Sec-WebSocket-Key`) and upgrades the connection.
+     - Path `/terminal-ws` → **TerminalHandler** — spawns `/bin/bash` via `ProcessBuilder` and bridges stdin/stdout with WebSocket frames.
+     - Any other path → **WebSocketHandler** — creates an isolated `FileSystemService` instance and enters a command loop (`ls`, `cd`, `mkdir`, `rm`, `rename`, `goto`, `suggest`, `undo`).
+   - Otherwise → **HTTPHandler** — serves static files from `web/`, or handles file upload (`PUT /upload`) and download (`GET /download`, `GET /downloadFolder`, `GET /downloadZip`).
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| No frameworks (pure `javax.net.ssl`) | Learning exercise; full control over HTTP and WebSocket protocols |
+| One thread per connection | Simple concurrency model suitable for a personal server |
+| `FileSystemService` per WebSocket session | Each client gets its own current directory and navigation history (thread-safe isolation) |
+| Sandboxed file operations | All paths are resolved relative to `cloudStorage/` — prevents directory traversal |
+| Multi-stage Docker build | Build with Maven in a temporary container, run with a slim JDK image |
+| Streamed directory listing | Large folders are sent in chunks (`LIST_CHUNK` / `LIST_END`) to keep the UI responsive |
+
+---
 
 ## Features
 
-- **File Browser** — Upload, download, delete, and rename files through web interface
-- **Web Terminal** — Full bash shell accessible in your browser (via xterm.js)
-- **File Preview** — View PDFs, images, videos, and text files directly
-- **Folder Download** — Download entire folders as ZIP archives
-- **Secure** — HTTPS with SSL/TLS encryption
+- **File Upload** — streaming `PUT` with progress, supports files up to 2 GB, writes to a `.part` temp file and renames on success
+- **File Download** — serves files with correct MIME types for inline preview (PDF, images, video, text)
+- **Folder Download** — compresses folders into ZIP archives on-the-fly (up to 3 GB)
+- **File Preview** — PDFs, images, videos, and text files render directly in the browser
+- **Web Terminal** — interactive bash shell via xterm.js with color support and terminal resize handling
+- **Path Autocomplete** — the `suggest` command returns matching folder names as the user types
+- **Navigation History** — `undo` command reverts to the previous directory
+- **HTTPS** — all traffic is encrypted using a Java KeyStore (`keystore.jks`)
+
+---
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Backend | Java 21 (pure Java, no frameworks) |
-| Frontend | HTML5, CSS3, JavaScript, xterm.js |
+| Layer | Technology |
+|-------|------------|
+| Backend | Java 21 — `SSLServerSocket`, `ProcessBuilder`, raw socket I/O |
+| Frontend | HTML5, CSS3, vanilla JavaScript |
+| Terminal | [xterm.js](https://xtermjs.org/) 5.3 with fit and web-links addons |
 | Build | Maven 3.9+ |
-| Container | Docker & Docker Compose |
-| Deployment | Ansible |
-
----
-
-## Prerequisites
-
-Before running ServerAccessHub, you need:
-
-1. **Docker & Docker Compose** installed on your machine
-2. **SSL Keystore** (`keystore.jks`) for HTTPS
-3. **Environment file** (`.env`) with keystore password
-
-### Generate SSL Keystore
-
-```bash
-keytool -genkeypair -alias serveraccesshub \
-  -keyalg RSA -keysize 2048 -validity 365 \
-  -keystore keystore.jks \
-  -storepass YOUR_PASSWORD \
-  -dname "CN=localhost, OU=Dev, O=Home, L=City, ST=State, C=US"
-```
-
-### Create .env File
-
-Create a `.env` file in the project root:
-
-```env
-KEYSTORE_PASSWORD=YOUR_PASSWORD
-```
-
----
-
-## Quick Start (Docker)
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/ServerAccessHub.git
-   cd ServerAccessHub
-   ```
-
-2. Generate SSL keystore (see above)
-
-3. Create `.env` file with your keystore password
-
-4. Build and run:
-   ```bash
-   docker compose up --build -d
-   ```
-
-5. Open in browser: **https://localhost:9090**
-
-> **Note:** The browser will show a certificate warning (self-signed cert). Click "Advanced" → "Proceed" to continue.
-
----
-
-## Server Deployment with Ansible
-
-Deploy ServerAccessHub to a remote Ubuntu server using Ansible.
-
-### What You Need
-
-1. **Ubuntu 20.04+** server with SSH access
-2. **Ansible** installed on your local machine
-3. **SSH key** configured for your server
-4. **Tailscale** (optional, for secure private network access)
-
-### Step 1: Configure Inventory
-
-Edit `ansible/inventory.ini`:
-
-```ini
-[servers]
-your-server-ip ansible_user=your-username ansible_ssh_private_key_file=~/.ssh/your-key
-```
-
-### Step 2: Set Variables
-
-Edit the variables in `ansible/playbook.yml` or create a separate vars file:
-
-```yaml
-vars:
-  app_dir: "~/ServerAccessHub"
-  github_repo: "https://github.com/your-username/ServerAccessHub.git"
-  keystore_password: "your-secure-password"
-  tailscale_ip: ""  # Optional: your Tailscale IP
-```
-
-### Step 3: Run Playbook
-
-```bash
-cd ansible
-ansible-playbook -i inventory.ini playbook.yml
-```
-
-### What Ansible Does
-
-1. Updates system packages
-2. Installs Docker, Java 21, and dependencies
-3. Clones the repository
-4. Generates SSL keystore
-5. Creates `.env` file
-6. Builds and starts Docker container
-
----
-
-## Tailscale Integration
-
-[Tailscale](https://tailscale.com/) provides a secure private network to access your server without exposing ports to the internet. The application binds to the `tailscale0` interface, making it accessible only through your Tailscale network.
-
-### Install Tailscale on Server
-
-```bash
-curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
-```
-
-### Get Your Tailscale IP (tailscale0 interface)
-
-```bash
-tailscale ip -4
-```
-
-This returns your Tailscale IP (e.g., `100.x.x.x`) which is assigned to the `tailscale0` interface.
-
-### Configure ServerAccessHub for Tailscale
-
-1. Add your Tailscale IP to `.env`:
-   ```env
-   TAILSCALE_IP=100.x.x.x
-   KEYSTORE_PASSWORD=your-password
-   ```
-
-2. Edit `docker-compose.yml` to bind only to the `tailscale0` interface:
-   ```yaml
-   ports:
-     - "${TAILSCALE_IP}:9090:8080"
-   ```
-   
-   This binds the container's port 8080 to your Tailscale IP on port 9090. The service will **not** be accessible from the public internet — only from devices on your Tailscale network.
-
-3. Restart the container:
-   ```bash
-   docker compose down
-   docker compose up -d
-   ```
-
-4. Verify binding to tailscale0:
-   ```bash
-   ss -tlnp | grep 9090
-   # Should show: 100.x.x.x:9090
-   ```
-
-Now access your server securely at: **https://100.x.x.x:9090** (only from Tailscale-connected devices)
-
----
-
-## Usage
-
-### File Browser
-
-- **Navigate** — Click folders to open, use breadcrumb or path bar to jump
-- **Upload** — Click the + button (bottom right) or drag & drop files
-- **Download** — Click on a file, or select "Download" from context menu
-- **Delete/Rename** — Right-click or long-press on files for options
-- **Preview** — PDFs, images, and videos open in browser
-
-### Web Terminal
-
-- Access at: **https://your-server:9090/terminal.html**
-- Full bash shell with color support
-- Working directory: `/app/cloudStorage`
-
----
-
-## File Storage
-
-Files are stored in the `cloudStorage/` directory, which is mounted as a Docker volume. Your files persist even when the container is restarted.
-
----
-
-## Configuration
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `KEYSTORE_PASSWORD` | Yes | Password for SSL keystore |
-| `TAILSCALE_IP` | No | Tailscale IP for private network binding |
-| `TZ` | No | Timezone (default: `Europe/Warsaw`) |
-
----
-
-## Ports
-
-| Port | Description |
-|------|-------------|
-| 8080 | Application port (inside container) |
-| 8080 | Host port (configurable in docker-compose.yml) |
+| Container | Docker (multi-stage build) & Docker Compose |
+| Deployment | Ansible playbook for Ubuntu servers |
 
 ---
 
@@ -221,44 +104,59 @@ Files are stored in the `cloudStorage/` directory, which is mounted as a Docker 
 
 ```
 ServerAccessHub/
-├── ansible/           # Ansible deployment files
-├── cloudStorage/      # File storage (Docker volume)
-├── docker/            # Docker configs
-├── docs/              # Documentation
-├── src/               # Java source code
-├── web/               # Frontend (HTML, JS, CSS)
-├── docker-compose.yml
-├── Dockerfile
-├── pom.xml
-└── keystore.jks       # SSL certificate (you create this)
+│
+├── src/main/java/org/example/
+│   ├── Main.java                       # Entry point — starts the server
+│   ├── Server.java                     # HTTPS server, TLS setup, request routing
+│   ├── Config.java                     # Reads config from env vars or .env file
+│   ├── HTTPHandler/
+│   │   └── HTTPHandler.java            # Static file serving, upload, download, ZIP
+│   ├── websocket/
+│   │   ├── WebSocketHandler.java       # File browser commands over WebSocket
+│   │   └── WebSocketUtils.java         # RFC 6455 handshake (SHA-1 + Base64)
+│   ├── filesystem/
+│   │   └── FileSystemService.java      # Sandboxed file operations (ls, cd, rm, mkdir…)
+│   └── terminal/
+│       └── TerminalHandler.java        # Bash session via ProcessBuilder + WebSocket
+│
+├── web/
+│   ├── index.html                      # File browser UI (single-page app)
+│   ├── script.js                       # WebSocket client, uploads, navigation logic
+│   └── terminal.html                   # xterm.js terminal UI
+│
+├── ansible/
+│   ├── playbook.yml                    # Automated deployment to Ubuntu server
+│   ├── inventory.ini                   # Target server configuration
+│   └── .env.yml.example                # Example variables for Ansible
+│
+├── cloudStorage/                       # Mounted volume — user files are stored here
+├── Dockerfile                          # Multi-stage build (Maven → JDK 21 runtime)
+├── docker-compose.yml                  # Container orchestration
+└── pom.xml                             # Maven build configuration
 ```
 
 ---
 
-## Troubleshooting
+## How the WebSocket Protocol Is Implemented
 
-### Certificate Warning in Browser
-This is normal for self-signed certificates. Click "Advanced" → "Proceed to site".
+The server implements the WebSocket protocol (RFC 6455) manually:
 
-### Cannot Connect
-- Check if container is running: `docker ps`
-- Check logs: `docker logs serveraccesshub`
-- Verify port is open: `curl -k https://localhost:9090`
+1. **Handshake** — when the server detects an `Upgrade: websocket` header, it extracts the `Sec-WebSocket-Key`, concatenates it with the magic GUID (`258EAFA5-E914-47DA-95CA-C5AB0DC85B11`), computes SHA-1, encodes it in Base64, and responds with HTTP 101.
+2. **Frame parsing** — the server reads the FIN bit, opcode (text `0x1`, close `0x8`), mask bit, payload length (7-bit, 16-bit, or 64-bit extended), masking key, and applies XOR unmasking as required by the spec.
+3. **Frame sending** — outgoing frames are unmasked (server-to-client), with proper length encoding for payloads under 126 bytes, under 65536 bytes, and larger.
 
-### Permission Denied
-Make sure `cloudStorage/` directory has correct permissions:
-```bash
-chmod -R 755 cloudStorage/
-```
+---
+
+## How the Terminal Works
+
+1. The browser opens a WebSocket connection to `/terminal-ws`.
+2. `TerminalHandler` spawns a bash process using `ProcessBuilder` with `/usr/bin/script -q -c /bin/bash /dev/null` to get pseudo-terminal behavior.
+3. A background thread continuously reads bash stdout and sends it to the browser as WebSocket text frames.
+4. The main thread reads WebSocket frames from the browser (keystrokes) and writes them to bash stdin.
+5. When the client disconnects, the bash process is destroyed.
 
 ---
 
 ## License
 
-MIT License
-
----
-
-## See Also
-
-- [DEPLOY.md](DEPLOY.md) — Detailed deployment guide
+MIT
